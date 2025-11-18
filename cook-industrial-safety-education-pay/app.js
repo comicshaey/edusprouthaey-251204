@@ -1,4 +1,6 @@
-// 251118화 수정: fetch 실패 시에도 직종 목록이 뜨도록 내장 스냅샷 사용
+// 251118화 수정: 조리종사원 산안전보건교육 + 통상임금 계산기
+// - fetch 실패 시에도 직종 목록이 뜨도록 내장 스냅샷 사용
+// - 온라인교육: 통상임금 × 시간 → 1.5배 가산 후 최종 원단위 절삭
 
 // 로컬용 기본 스냅샷 (영양사 / 조리사 / 조리실무사 + 정액급식비·상여·명절휴가비)
 const FALLBACK_DATA = {
@@ -12,6 +14,7 @@ const FALLBACK_DATA = {
       정기상여금: 83330,
       명절휴가비: 154160,
       "교무행정사(직무수당)": 30000
+      "위험수당": 50000
     },
     jobs: [
       {
@@ -293,36 +296,42 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     }
   }
 
-  // 학기 중 온라인 교육: 기준 시급 재계산
+  // 학기 중 온라인 교육: 통상임금 × 시간 먼저 곱하고, 가산배율 적용 후 최종 10원 절사
   function recalcEdu(){
     const useManual = eduUseManual && eduUseManual.checked;
-    let baseHourly = 0;
 
-    if(useManual){
-      const manual = Number(eduManualHourly.value || 0);
-      baseHourly = manual;
-    }else{
+    // 기준 시급: 직접 입력 or 통상임금
+    let baseHourly = 0;
+    if (useManual) {
+      baseHourly = Number(eduManualHourly.value || 0);
+    } else {
       baseHourly = lastHourly;
     }
 
     const eduH = Number(eduHoursInp.value || 0);
     const mult = Number(eduMultiplierInp.value || 0);
 
-    if(!baseHourly || !mult || !eduH){
+    // 필수 값 없으면 초기 상태
+    if (!baseHourly || !eduH || !mult) {
       outEduBaseHourly.textContent = baseHourly ? money(baseHourly) : '-';
       outEduOverHourly.textContent = '-';
-      outEduAmount.textContent = '0';
+      outEduAmount.textContent     = '0';
       return;
     }
 
-    const overHourlyRaw = baseHourly * mult;
-    const overHourly = floor10(overHourlyRaw);
-    const amountRaw = overHourly * eduH;
-    const amount = floor10(amountRaw);
+    // 1) 통상임금 × 교육시간
+    const baseAmountRaw = baseHourly * eduH;
+    // 2) 가산배율 적용 (예: 1.5배)
+    const overAmountRaw = baseAmountRaw * mult;
+    // 3) 최종 지급액만 10원 단위 절사
+    const finalAmount   = floor10(overAmountRaw);
 
-    outEduBaseHourly.textContent = money(baseHourly);
-    outEduOverHourly.textContent = money(overHourly);
-    outEduAmount.textContent = money(amount);
+    // 표시용: 기준 시급과 가산 시급도 같이 보여주기
+    const overHourlyRaw = baseHourly * mult;
+
+    outEduBaseHourly.textContent = money(baseHourly);      // 기준 시급
+    outEduOverHourly.textContent = money(overHourlyRaw);   // 가산 시급(표시용)
+    outEduAmount.textContent     = money(finalAmount);     // 최종 지급액
   }
 
   function recalc(){
@@ -357,9 +366,9 @@ document.addEventListener('DOMContentLoaded', async ()=>{
     recalcEdu();
   }
 
-  // 방학 집체교육 계산 (조금 더 친절한 버전)
+  // 방학 집체교육 계산 (직종 자동 연동 포함)
   function calcVacation(){
-    // 자동 불러오기 체크 상태인데 기본급/급식비가 비어 있으면 여기서 한 번 더 채워줌
+    // 자동 불러오기 체크 상태인데 기본급/급식비 비어 있으면 여기서 한 번 더 채워줌
     if (vacAuto && vacAuto.checked) {
       if ((!vacBasic.value || !vacMeal.value) && jobSel && jobSel.value) {
         const job = (snap.jobs || []).find(j => j.직종 === jobSel.value);
@@ -393,7 +402,7 @@ document.addEventListener('DOMContentLoaded', async ()=>{
 
     const monthlyTotal = basic + meal;
     const dailyRaw = monthlyTotal / days;
-    const dailyPay = floor10(dailyRaw);
+    const dailyPay = floor10(dailyRaw); // 10원 단위 절사
 
     const hourlyRaw = dailyPay / 8;
     const hourlyPay = floor10(hourlyRaw);
@@ -416,10 +425,10 @@ document.addEventListener('DOMContentLoaded', async ()=>{
       <table>
         <tr><th>항목</th><th>금액</th></tr>
         <tr><td>월임금 (기본급 + 정액급식비)</td><td>${money(monthlyTotal)}</td></tr>
-        <tr><td>일급 (월임금 ÷ 월일수, 10원 단위 절사)</td><td>${money(dailyPay)}</td></tr>
-        <tr><td>시간급 (일급 ÷ 8시간, 10원 단위 절사)</td><td>${money(hourlyPay)}</td></tr>
-        <tr><td>교육시간 임금 (시간급 × ${eduH}시간, 10원 단위 절사)</td><td>${money(eduPay)}</td></tr>
-        <tr><td>최저임금 기준 (최저시급 × ${eduH}시간, 10원 단위 절사)</td><td>${money(minPay)}</td></tr>
+        <tr><td>일급 (월임금 ÷ 월일수, 원 단위 절삭)</td><td>${money(dailyPay)}</td></tr>
+        <tr><td>통상임금 (일급 ÷ 8시간, 원 단위 절삭)</td><td>${money(hourlyPay)}</td></tr>
+        <tr><td>교육시간 임금 (시간급 × ${eduH}시간, 원 단위 절삭)</td><td>${money(eduPay)}</td></tr>
+        <tr><td>최저임금 기준 (최저시급 × ${eduH}시간, 원 단위 절삭)</td><td>${money(minPay)}</td></tr>
         <tr><td>최저임금 보전 추가액</td><td>${money(extra)}</td></tr>
         <tr><td class="result-strong">최종 지급액</td><td class="result-strong">${money(finalPay)}</td></tr>
       </table>

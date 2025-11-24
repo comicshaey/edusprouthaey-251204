@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="color-scheme" content="light" />
-  <title>교육행정실 예산 계산기</title>
+  <title>교육행정실 본예산 편성 내역 계산기</title>
   <link rel="icon" href="/static/favicon.ico" />
   <link rel="stylesheet" href="/static/style.css" />
   <script src="/static/disable-copy.js"></script>
@@ -14,8 +14,7 @@
     <div class="shell">
       <h1>교육행정실 예산 계산기</h1>
       <p class="sub">
-        사무용품, OA장비 소모품(토너 등), 시설 경미수선, 기타 행정운영비 예산을<br>
-        단가·수량 기준으로 산출하는 계산기입니다.
+        ·사무용품, 토너, 시설 소규모 수선, 기타 행정 운영비 예산 산출기
       </p>
     </div>
   </header>
@@ -27,26 +26,25 @@
         <div class="grid-3">
           <div class="field">
             <label for="aoYear">회계연도</label>
-            <input id="aoYear" type="number" value="2025" min="2020" max="2100" />
+            <input id="aoYear" type="number" value="2026" min="2020" max="2100" />
           </div>
           <div class="field">
             <label for="aoWriter">작성자</label>
-            <input id="aoWriter" type="text" placeholder="예: 교육행정실 고해영" />
+            <input id="aoWriter" type="text" placeholder="예: 고주무관" />
           </div>
           <div class="field">
-            <label>부서</label>
+            <label>사업부서</label>
             <input type="text" value="교육행정실" disabled />
           </div>
         </div>
 
         <p class="muted">
-          사무용품, 프린터 토너, 복합기 계약, 시설 경미수선, 업무추진 관련 소액비용 등을
-          항목별로 입력하면 카테고리별 소계와 총계가 자동 계산됩니다.
+          ·사무용품, 복합기 토너, 시설 소규모 수선비 등 항목별로 입력하면 소계 및 총계 자동 계산됨.
         </p>
 
         <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
-          <a href="/initial-budget-calculator-by-departments/" class="btn-home">부서별 본예산 메뉴로</a>
-          <a href="/" class="btn-home">전체 메인으로</a>
+          <a href="/initial-budget-calculator-by-departments/" class="btn-home">부서별 메뉴로 돌아가기</a>
+          <a href="/" class="btn-home">메인으로 돌아가기</a>
         </div>
 
         <hr>
@@ -110,3 +108,4 @@
   <script src="/static/global-loader.js?v=1"></script>
 </body>
 </html>
+

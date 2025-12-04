@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>관내여비 자동 검증기 (Pyodide · 원자료 버전)</title>
+  <title>관내여비 자동 검증기 (Pyodide · 원자료+설명)</title>
 
   <!-- 공통 스타일 -->
   <link rel="stylesheet" href="/static/style.css" />
@@ -48,7 +48,7 @@
     .result-box h3 { margin-top: 0; }
     .result-box textarea {
       width: 100%;
-      min-height: 180px;
+      min-height: 160px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       font-size: 0.9rem;
       border-radius: 8px;
@@ -81,7 +81,7 @@
     <div class="shell">
       <h1>관내여비 자동 검증기 (브라우저 Pyodide)</h1>
       <p class="sub">
-        · 나이스 관내·관외 여비 <strong>원자료 그대로</strong> 엑셀(.xlsx)을 업로드하면, 브라우저 안에서 파이썬(pandas)로 <strong>관내여비만 자동 필터</strong>해서 월별 요약·이상행을 검증합니다.<br />
+        · 나이스 관내·관외 여비 <strong>원자료 그대로</strong> 엑셀(.xlsx)을 업로드하면, 브라우저 안에서 파이썬(pandas)로 <strong>관내여비만 자동 필터</strong>해서 월별 요약·이상행·규정 설명까지 생성합니다.<br />
         · <strong>지급금액이 수식이든, 값으로 편집해둔 파일이든 모두 검증 가능</strong>하도록 처리했습니다.
       </p>
     </div>
@@ -107,9 +107,9 @@
     <section class="section file-area">
       <h2 class="local-h2">2. 엑셀 업로드 및 검증 실행</h2>
 
-      <p><span class="badge">관내여비 자동 필터 + 단가 검증</span></p>
+      <p><span class="badge">관내여비 자동 필터 + 단가 검증 + 규정 설명</span></p>
       <p class="local-small muted">
-        · 3년치 관내·관외 여비 원자료 엑셀(.xlsx)을 모두 선택해서 업로드하면, 관내 행만 골라서 월별 요약과 이상행 목록을 한 번에 생성합니다.<br />
+        · 3년치 관내·관외 여비 원자료 엑셀(.xlsx)을 모두 선택해서 업로드하면, 관내 행만 골라서 월별 요약·이상행 목록·규정 관점 설명을 한 번에 생성합니다.<br />
         · 파일 선택 후 <strong>“검증 실행”</strong> 버튼을 눌러주세요.
       </p>
 
@@ -124,7 +124,7 @@
     </section>
 
     <section class="section">
-      <h2 class="local-h2">3. 결과 (CSV 형식)</h2>
+      <h2 class="local-h2">3. 결과 (CSV 및 설명)</h2>
 
       <div class="result-box">
         <h3 class="local-h3">3-1. 월별 관내여비 요약 (inner_monthly_summary)</h3>
@@ -141,6 +141,15 @@
           · 10,000 / 20,000원이 아닌 지급액이 표시되며, 연월/지급일자/성명/지급액/여비금액/출장구분/출장지/출장목적/파일명·시트명이 함께 출력됩니다.
         </p>
         <textarea id="detailOutput" readonly placeholder="여기에 이상행 상세 CSV 결과가 표시됩니다."></textarea>
+      </div>
+
+      <div class="result-box">
+        <h3 class="local-h3">3-3. 규정 관점 설명 요약 (inner_explanation)</h3>
+        <p class="local-small muted">
+          · 월별 검증 결과를 <strong>관내출장 여비 규정</strong> 관점에서 해석한 설명입니다.<br />
+          · “이상행이 있는 달”은 어떤 취지로 추가 확인이 필요한지, “이상행이 없는 달”은 어떤 의미인지 간단히 정리합니다.
+        </p>
+        <textarea id="explainOutput" readonly placeholder="여기에 규정 관점 설명 요약이 표시됩니다."></textarea>
       </div>
     </section>
   </main>
@@ -171,32 +180,71 @@
       await pyodide.loadPackage("pandas");
 
       const pythonCode = `
-import io
 import pandas as pd
 
 # ===== 환경 설정 (원자료 열 이름) =====
 DATE_COL        = "시작일"     # 날짜
-END_DATE_COL    = "종료일"     # (현재는 요약에 직접 사용하진 않지만 구조 인지용)
+END_DATE_COL    = "종료일"
 TYPE_COL        = "출장구분"   # 관내/관외 구분
 NAME_COL        = "출장자"     # 성명
-ACCOUNT_COL     = "계좌정보"   # 참고용
-PLACE_COL       = "출장지"     # 출장지
-PURPOSE_COL     = "출장목적"   # 출장 목적
+ACCOUNT_COL     = "계좌정보"
+PLACE_COL       = "출장지"
+PURPOSE_COL     = "출장목적"
 FLAG_COL        = "부지급"     # 부지급 여부 ("아니오"만 실제 지급)
 INNER_KEYWORD   = "관내"       # "관내"가 들어간 행만 관내여비로 간주
 FARE_COL        = "여비금액"   # 여비금액(참고용)
-BIZINFO_COL     = "사업정보"   # 참고용
+BIZINFO_COL     = "사업정보"
 AMOUNT_COL      = "지급금액"   # 실제 지급액(수식이든 값이든 허용)
 
-# 관내 단가 (왕복 2km 이상, 4시간 기준)
+# 관내 단가 (왕복 2km 이상, 4시간 기준) - 기관 여비지침 단가를 반영
 ALLOWED_AMOUNTS = {10000, 20000}
 
 def normalize_date_series(s):
-    \\"\\\"날짜 열을 datetime으로 통일\\"\\\"
+    "날짜 열을 datetime으로 통일"
     return pd.to_datetime(s, errors="coerce")
 
+def make_explanation(summary_df):
+    "월별 요약을 바탕으로 규정 관점 설명 텍스트 생성"
+    lines = []
+
+    if summary_df.empty:
+        lines.append("관내여비로 집계된 행이 없어 규정 관점 설명을 생성할 수 없습니다.")
+    else:
+        for row in summary_df.itertuples(index=False):
+            ym = row.연월
+            total = int(row.관내여비_총액)
+            cnt = int(row.지급건수)
+            abnormal = int(row.이상행_건수)
+            min_amt = int(row.최소금액)
+            max_amt = int(row.최대금액)
+            all_ok = bool(row.전건_허용단위금액)
+
+            if all_ok:
+                lines.append(
+                    f"{ym}: 관내여비 {cnt}건, 합계 {total:,}원."
+                    f" 모든 건이 내부 관내 단가(10,000원/20,000원) 범위 내에서 지급되어,"
+                    " 단가 측면에서는 규정 취지(반일·종일 정액 지급)에 부합하는 것으로 해석할 수 있습니다."
+                )
+            else:
+                lines.append(
+                    f"{ym}: 관내여비 {cnt}건, 합계 {total:,}원 중 이상행 {abnormal}건 존재."
+                    f" 최소금액 {min_amt:,}원, 최대금액 {max_amt:,}원으로,"
+                    " 관내 단가(10,000원/20,000원)를 벗어나는 금액이 있어 사유 확인이 필요합니다."
+                    " 예를 들어, 교통비·숙박비 등의 다른 여비 항목과 혼합 입력되었는지,"
+                    " 기관 여비지침상 예외조항이나 별도 승인에 따른 금액인지 점검해야 합니다."
+                )
+
+    lines.append("")
+    lines.append("[관내출장 여비 관련 규정 취지 요약]")
+    lines.append("- 관내출장 여비는 통상 반일·종일 단위의 정액 여비로 운영되며, 기관 여비지침에서 단가(예: 10,000원/20,000원)를 정합니다.")
+    lines.append("- 동일한 유형의 관내출장에 대해서는 동일 단가를 적용하는 것이 원칙입니다.")
+    lines.append("- 단가와 다른 금액이 지급된 경우, 여비 규정·지침상 예외사유(특례, 타 여비 항목과의 구분, 별도 승인 등)에 해당하는지 증빙과 함께 확인해야 합니다.")
+    lines.append("- 이 도구의 이상행 표시는 '규정 위반 확정'이 아니라, 추가 검토가 필요한 의심 구간을 표시하는 보조지표입니다.")
+
+    return "\\n".join(lines)
+
 def audit_inner_travel(file_list):
-    \\"\\\"원자료(관내·관외 혼합) 엑셀에서 관내여비만 필터해 검증\\"\\\"
+    "원자료(관내·관외 혼합) 엑셀에서 관내여비만 필터해 검증 + 설명 생성"
     frames = []
     for path in file_list:
         try:
@@ -305,11 +353,14 @@ def audit_inner_travel(file_list):
         }
     )
 
+    # ===== 3) 규정 관점 설명 =====
+    explanation_text = make_explanation(summary)
+
     # CSV 문자열로 변환
     summary_csv = summary.to_csv(index=False)
     detail_csv = detail.to_csv(index=False)
 
-    return summary_csv, detail_csv
+    return summary_csv, detail_csv, explanation_text
       `;
 
       pyodide.runPython(pythonCode);
@@ -326,9 +377,11 @@ def audit_inner_travel(file_list):
       const logEl = document.getElementById("pyLog");
       const summaryOutput = document.getElementById("summaryOutput");
       const detailOutput = document.getElementById("detailOutput");
+      const explainOutput = document.getElementById("explainOutput");
 
       summaryOutput.value = "";
       detailOutput.value = "";
+      explainOutput.value = "";
 
       const fileInput = document.getElementById("fileInput");
       const files = fileInput.files;
@@ -363,18 +416,20 @@ def audit_inner_travel(file_list):
         const fileListLiteral = JSON.stringify(filePaths);
         const code = `
 file_list = ${fileListLiteral}
-summary_csv, detail_csv = audit_inner_travel(file_list)
+summary_csv, detail_csv, explanation_text = audit_inner_travel(file_list)
 `;
         await pyodide.runPythonAsync(code);
 
         const summary_csv = pyodide.globals.get("summary_csv");
         const detail_csv = pyodide.globals.get("detail_csv");
+        const explanation_text = pyodide.globals.get("explanation_text");
 
         summaryOutput.value = summary_csv.toString();
         detailOutput.value = detail_csv.toString();
+        explainOutput.value = explanation_text.toString();
 
         logEl.textContent =
-          "검증 완료. 아래 월별 요약과 이상행 CSV를 확인해 주세요. 필요시 복사해서 엑셀에 붙여넣으면 됩니다.";
+          "검증 완료. 아래 월별 요약, 이상행, 규정 관점 설명을 확인해 주세요. 필요시 복사해서 엑셀·보고서에 붙여넣으면 됩니다.";
       } catch (err) {
         console.error(err);
         logEl.textContent =
